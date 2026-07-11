@@ -2,12 +2,12 @@ import { Resource } from "sst";
 import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, GetCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
-import Anthropic from "@anthropic-ai/sdk";
+import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedrock-runtime";
 import pdf from "pdf-parse";
 
 const s3 = new S3Client({});
 const dynamo = DynamoDBDocumentClient.from(new DynamoDBClient({}));
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const bedrock = new BedrockRuntimeClient({ region: "us-east-1" });
 
 export const handler = async (event) => {
   try {
@@ -38,27 +38,21 @@ export const handler = async (event) => {
 
     const { resumeKey } = sessionResult.Item;
 
-    // fetch the resume PDF from S3
+    // fetch resume PDF from S3
     const s3Response = await s3.send(new GetObjectCommand({
       Bucket: Resource.Resumes.name,
       Key: resumeKey,
     }));
 
-    // convert PDF stream to buffer then extract text
+    // convert PDF to text
     const pdfBuffer = Buffer.from(
       await s3Response.Body.transformToByteArray()
     );
     const pdfData = await pdf(pdfBuffer);
     const resumeText = pdfData.text;
 
-    // call Claude to generate questions
-    const message = await anthropic.messages.create({
-      model: "claude-haiku-4-5",
-      max_tokens: 1024,
-      messages: [
-        {
-          role: "user",
-          content: `You are an expert technical interviewer. Based on this resume and job description, generate 8 interview questions.
+    // call Claude Haiku via Bedrock
+    const prompt = `You are an expert technical interviewer. Based on this resume and job description, generate 8 interview questions.
 
 RESUME:
 ${resumeText}
@@ -75,15 +69,27 @@ Return ONLY a JSON array, no explanation, no markdown. Example format:
 [
   { "id": "1", "question": "...", "type": "behavioral" },
   { "id": "2", "question": "...", "type": "technical" }
-]`,
-        },
-      ],
-    });
+]`;
 
-    const responseText = message.content[0].type === "text" ? message.content[0].text : "";
+    const bedrockResponse = await bedrock.send(new InvokeModelCommand({
+      modelId: "anthropic.claude-haiku-4-5-20251001-v1:0",
+      contentType: "application/json",
+      accept: "application/json",
+      body: JSON.stringify({
+        anthropic_version: "bedrock-2023-05-31",
+        max_tokens: 1024,
+        messages: [
+          { role: "user", content: prompt }
+        ],
+      }),
+    }));
+
+    // parse Bedrock response
+    const responseBody = JSON.parse(Buffer.from(bedrockResponse.body).toString());
+    const responseText = responseBody.content[0].text;
     const questions = JSON.parse(responseText);
 
-    // save questions and job description to the session
+    // save questions to session in DynamoDB
     await dynamo.send(new UpdateCommand({
       TableName: Resource.Sessions.name,
       Key: { sessionId },
