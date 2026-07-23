@@ -24,14 +24,20 @@ export const handler = async (event) => {
       };
     }
 
-    const { questions, transcripts, jobDescription } = sessionResult.Item;
+    const { questions = [], transcripts, transcript, latestTranscript, jobDescription } = sessionResult.Item;
+
+    const sessionTranscript = latestTranscript || transcript || "";
 
     // build Q&A pairs for Claude to evaluate
     const qaPairs = questions.map((q) => ({
       question: q.question,
       type: q.type,
-      answer: transcripts?.[q.id] || "No answer recorded",
+      answer: transcripts?.[q.id] || sessionTranscript || "No answer recorded",
     }));
+
+    const transcriptContext = qaPairs.length > 0
+      ? JSON.stringify(qaPairs, null, 2)
+      : sessionTranscript;
 
     const prompt = `You are an expert interview coach. Evaluate these interview answers and provide detailed feedback.
 
@@ -39,7 +45,7 @@ JOB DESCRIPTION:
 ${jobDescription}
 
 QUESTIONS AND ANSWERS:
-${JSON.stringify(qaPairs, null, 2)}
+${transcriptContext}
 
 Return ONLY a JSON object in this exact format, no markdown:
 {
