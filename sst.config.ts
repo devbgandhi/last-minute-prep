@@ -12,10 +12,18 @@ export default $config({
   async run() {
     // Storage
     const resumesBucket = new sst.aws.Bucket("Resumes", {
-      cors: true,
+      cors: {
+        allowOrigins: ["*"],
+        allowMethods: ["GET", "HEAD", "POST", "PUT", "DELETE"],
+        allowHeaders: ["*"],
+      },
     });
     const recordingsBucket = new sst.aws.Bucket("Recordings", {
-      cors: true,
+      cors: {
+        allowOrigins: ["*"],
+        allowMethods: ["GET", "HEAD", "POST", "PUT", "DELETE"],
+        allowHeaders: ["*"],
+      },
     });
 
     // Database
@@ -54,7 +62,11 @@ export default $config({
 
     // API
     const api = new sst.aws.ApiGatewayV2("Api", {
-      cors: true,
+      cors: {
+        allowOrigins: ["*"],
+        allowMethods: ["GET", "HEAD", "POST", "PUT", "DELETE"],
+        allowHeaders: ["*"],
+      },
     });
 
     api.route("POST /resume/upload-url", {
