@@ -10,33 +10,38 @@ const dynamo = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
 export const handler = async (event) => {
   try {
-    const { fileName, userId } = JSON.parse(event.body);
+    const { name, jobTitle, jobDescription, fileName, fileType } = JSON.parse(event.body || "{}");
 
-    if (!fileName) {
+    if (!name || !jobTitle || !jobDescription || !fileName) {
       return {
         statusCode: 400,
         headers: { "Access-Control-Allow-Origin": "*" },
-        body: JSON.stringify({ error: "fileName is required" }),
+        body: JSON.stringify({ error: "name, jobTitle, jobDescription and fileName are required" }),
       };
     }
 
-    const effectiveUserId = userId || `guest-${uuidv4()}`;
     const sessionId = uuidv4();
-    const key = `${effectiveUserId}/${sessionId}/${fileName}`;
+    const resumeKey = `resumes/${sessionId}/${fileName}`;
 
-    const command = new PutObjectCommand({
-      Bucket: Resource.Resumes.name,
-      Key: key,
-    });
-    const uploadUrl = await getSignedUrl(s3, command, { expiresIn: 300 });
+    const uploadUrl = await getSignedUrl(
+      s3,
+      new PutObjectCommand({
+        Bucket: Resource.Resumes.name,
+        Key: resumeKey,
+        ContentType: fileType || "application/pdf",
+      }),
+      { expiresIn: 300 }
+    );
 
     await dynamo.send(new PutCommand({
       TableName: Resource.Sessions.name,
       Item: {
         sessionId,
-        userId: effectiveUserId,
-        resumeKey: key,
-        status: "RESUME_PENDING",
+        name,
+        jobTitle,
+        jobDescription,
+        resumeKey,
+        status: "STARTED",
         createdAt: new Date().toISOString(),
       },
     }));
@@ -44,15 +49,14 @@ export const handler = async (event) => {
     return {
       statusCode: 200,
       headers: { "Access-Control-Allow-Origin": "*" },
-      body: JSON.stringify({ uploadUrl, key, sessionId, userId: effectiveUserId }),
+      body: JSON.stringify({ uploadUrl, sessionId, resumeKey }),
     };
-
   } catch (err) {
     console.error(err);
     return {
       statusCode: 500,
       headers: { "Access-Control-Allow-Origin": "*" },
-      body: JSON.stringify({ error: "Failed to generate upload URL" }),
+      body: JSON.stringify({ error: "Failed to start session" }),
     };
   }
-};W
+};

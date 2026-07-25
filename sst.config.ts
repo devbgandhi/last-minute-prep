@@ -69,9 +69,9 @@ export default $config({
       },
     });
 
-    api.route("POST /resume/upload-url", {
-      handler: "packages/functions/resume-upload.handler",
-      link: [resumesBucket, sessionsTable, usersTable],
+    api.route("POST /sessions/start", {
+      handler: "packages/functions/sessions-start.handler",
+      link: [resumesBucket, sessionsTable],
     });
 
     api.route("POST /sessions/{sessionId}/questions", {
