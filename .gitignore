@@ -1,3 +1,9 @@
 
 # sst
 .sst
+
+# dependencies and build output
+node_modules
+.next
+dist
+coverage
