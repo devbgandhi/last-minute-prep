@@ -176,6 +176,66 @@ input[type="file"] {
   padding: 18px;
 }
 
+.avatar-stage {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  grid-gap: 14px;
+  gap: 14px;
+  align-items: center;
+}
+
+.avatar-face {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, #1f1a17, #0b5fff);
+  color: white;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.avatar-copy {
+  display: grid;
+  grid-gap: 6px;
+  gap: 6px;
+}
+
+.camera-preview {
+  width: 100%;
+  min-height: 300px;
+  border-radius: 18px;
+  background: #111;
+  object-fit: cover;
+}
+
+.question-list {
+  margin: 0;
+  padding-left: 20px;
+  display: grid;
+  grid-gap: 12px;
+  gap: 12px;
+}
+
+.question-item {
+  line-height: 1.5;
+}
+
+.question-item.active {
+  font-weight: 700;
+}
+
+.score-pill {
+  width: -moz-fit-content;
+  width: fit-content;
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: white;
+  font-weight: 800;
+}
+
 .stack {
   display: grid;
   grid-gap: 10px;

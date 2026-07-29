@@ -1,4 +1,12 @@
-"use client";
+import InterviewWorkspace from "../../../components/interview-workspace";
+
+export default function InterviewSessionPage({ params }) {
+  return (
+    <main className="shell">
+      <InterviewWorkspace sessionId={params.sessionId} />
+    </main>
+  );
+}"use client";
 
 import { useEffect, useState } from "react";
 import { apiFetch } from "../../../lib/api";
