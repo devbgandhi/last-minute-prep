@@ -1,8 +1,13 @@
 {
   "dependencies": {
     "@aws-sdk/client-bedrock-runtime": "^3.1085.0",
+    "@aws-sdk/client-dynamodb": "^3.1095.0",
+    "@aws-sdk/client-polly": "^3.1095.0",
     "@aws-sdk/client-transcribe": "^3.1085.0",
     "@aws-sdk/client-s3": "^3.1079.0",
-    "@aws-sdk/s3-request-presigner": "^3.1079.0"
+    "@aws-sdk/lib-dynamodb": "^3.1095.0",
+    "@aws-sdk/s3-request-presigner": "^3.1079.0",
+    "pdf-parse": "^1.1.1",
+    "uuid": "^11.1.0"
   }
 }

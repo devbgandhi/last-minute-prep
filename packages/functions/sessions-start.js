@@ -10,7 +10,7 @@ const dynamo = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
 export const handler = async (event) => {
   try {
-    const { name, jobTitle, jobDescription, fileName, fileType } = JSON.parse(event.body || "{}");
+    const { sessionId: requestedSessionId, name, jobTitle, jobDescription, fileName, fileType } = JSON.parse(event.body || "{}");
 
     if (!name || !jobTitle || !jobDescription || !fileName) {
       return {
@@ -20,7 +20,7 @@ export const handler = async (event) => {
       };
     }
 
-    const sessionId = uuidv4();
+    const sessionId = requestedSessionId || uuidv4();
     const resumeKey = `resumes/${sessionId}/${fileName}`;
 
     const uploadUrl = await getSignedUrl(

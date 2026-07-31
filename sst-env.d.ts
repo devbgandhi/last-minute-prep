@@ -10,14 +10,6 @@ declare module "sst" {
       "type": "sst.aws.ApiGatewayV2"
       "url": string
     }
-    "Auth": {
-      "id": string
-      "type": "sst.aws.CognitoUserPool"
-    }
-    "QuestionBank": {
-      "name": string
-      "type": "sst.aws.Dynamo"
-    }
     "Recordings": {
       "name": string
       "type": "sst.aws.Bucket"
@@ -34,18 +26,9 @@ declare module "sst" {
       "name": string
       "type": "sst.aws.Dynamo"
     }
-    "Users": {
-      "name": string
-      "type": "sst.aws.Dynamo"
-    }
     "Web": {
       "type": "sst.aws.Nextjs"
       "url": string
-    }
-    "WebClient": {
-      "id": string
-      "secret": string
-      "type": "sst.aws.CognitoUserPoolClient"
     }
   }
 }

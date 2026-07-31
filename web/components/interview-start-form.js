@@ -1,23 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "../lib/api";
-import { getGuestUserId } from "../lib/guest-user";
 
 export default function InterviewStartForm({ compact = false }) {
   const router = useRouter();
-  const [guestUserId, setGuestUserId] = useState(null);
   const [name, setName] = useState("");
   const [jobTitle, setJobTitle] = useState("");
   const [file, setFile] = useState(null);
   const [jobDescription, setJobDescription] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
-
-  useEffect(() => {
-    setGuestUserId(getGuestUserId());
-  }, []);
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -38,17 +32,15 @@ export default function InterviewStartForm({ compact = false }) {
       return;
     }
 
-    if (!guestUserId) {
-      setError("Guest identity is still initializing. Try again in a moment.");
-      return;
-    }
-
     setIsSubmitting(true);
 
     try {
+      const clientSessionId = crypto.randomUUID();
+
       const uploadData = await apiFetch("/sessions/start", {
         method: "POST",
         body: JSON.stringify({
+          sessionId: clientSessionId,
           name,
           jobTitle,
           jobDescription,
@@ -158,12 +150,11 @@ export default function InterviewStartForm({ compact = false }) {
         <aside className="panel stack">
           <div className="eyebrow">Guest mode</div>
           <div className="muted">
-            No account is needed right now. Your browser stores a guest id so your sessions can still be grouped.
+            No account is needed right now. You can start directly and share your results with the session URL.
           </div>
-          {guestUserId ? <div className="success">Guest id ready: {guestUserId}</div> : <div className="muted">Preparing guest id...</div>}
           <div className="panel stack">
             <strong>Flow</strong>
-            <span className="muted">1. Request signed upload URL</span>
+            <span className="muted">1. Create guest session + signed upload URL</span>
             <span className="muted">2. Upload PDF to S3</span>
             <span className="muted">3. Generate questions</span>
             <span className="muted">4. Open interview page</span>

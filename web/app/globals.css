@@ -1,15 +1,16 @@
 :root {
   color-scheme: light;
-  --bg: #f6efe6;
-  --bg-2: #efe2d1;
-  --panel: rgba(255, 255, 255, 0.78);
-  --text: #1f1a17;
-  --muted: #6b5f57;
-  --accent: #0b5fff;
-  --accent-2: #ff6f3c;
-  --border: rgba(31, 26, 23, 0.12);
-  --shadow: 0 20px 60px rgba(31, 26, 23, 0.12);
-  --radius: 24px;
+  --bg: #f3f6fb;
+  --bg-2: #e8eef8;
+  --surface: rgba(255, 255, 255, 0.86);
+  --surface-strong: #ffffff;
+  --text: #111827;
+  --muted: #4b5563;
+  --accent: #0a66ff;
+  --accent-2: #084fc7;
+  --border: #d6deeb;
+  --shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+  --radius: 18px;
 }
 
 * {
@@ -21,11 +22,13 @@ body {
   margin: 0;
   min-height: 100%;
   background:
-    radial-gradient(circle at top left, rgba(11, 95, 255, 0.12), transparent 32%),
-    radial-gradient(circle at bottom right, rgba(255, 111, 60, 0.14), transparent 28%),
-    linear-gradient(135deg, var(--bg), var(--bg-2));
+    radial-gradient(900px 500px at 10% -10%, rgba(10, 102, 255, 0.12), transparent 55%),
+    radial-gradient(700px 400px at 100% 0%, rgba(8, 79, 199, 0.09), transparent 52%),
+    linear-gradient(160deg, var(--bg), var(--bg-2));
   color: var(--text);
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: "Avenir Next", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 a {
@@ -49,13 +52,13 @@ input[type="file"] {
   min-height: 100vh;
   display: grid;
   place-items: center;
-  padding: 32px 20px;
+  padding: 40px 24px;
 }
 
 .card {
-  width: min(920px, 100%);
-  background: var(--panel);
-  backdrop-filter: blur(18px);
+  width: min(1080px, 100%);
+  background: var(--surface);
+  backdrop-filter: blur(10px);
   border: 1px solid var(--border);
   box-shadow: var(--shadow);
   border-radius: var(--radius);
@@ -69,22 +72,24 @@ input[type="file"] {
 
 .eyebrow {
   text-transform: uppercase;
-  letter-spacing: 0.18em;
-  font-size: 12px;
+  letter-spacing: 0.16em;
+  font-size: 11px;
+  font-weight: 700;
   color: var(--muted);
 }
 
 .title {
   margin: 0;
-  font-size: clamp(2.4rem, 6vw, 5rem);
-  line-height: 0.95;
+  font-size: clamp(2rem, 5vw, 4rem);
+  line-height: 1.05;
+  letter-spacing: -0.02em;
 }
 
 .lede {
   max-width: 62ch;
   margin: 0;
-  font-size: 1.05rem;
-  line-height: 1.65;
+  font-size: 1rem;
+  line-height: 1.7;
   color: var(--muted);
 }
 
@@ -96,12 +101,13 @@ input[type="file"] {
 
 .button {
   appearance: none;
-  border: 0;
+  border: 1px solid transparent;
   border-radius: 999px;
-  padding: 14px 20px;
+  padding: 12px 18px;
+  font-size: 0.95rem;
   font-weight: 700;
   cursor: pointer;
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
 }
 
 .button:hover {
@@ -110,14 +116,20 @@ input[type="file"] {
 
 .button.primary {
   color: white;
-  background: linear-gradient(135deg, var(--accent), #1749d1);
-  box-shadow: 0 12px 30px rgba(11, 95, 255, 0.22);
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  box-shadow: 0 8px 20px rgba(10, 102, 255, 0.24);
 }
 
 .button.secondary {
-  background: rgba(255, 255, 255, 0.7);
+  background: var(--surface-strong);
   color: var(--text);
   border: 1px solid var(--border);
+}
+
+.button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
 }
 
 .grid {
@@ -127,7 +139,7 @@ input[type="file"] {
 
 .form {
   display: grid;
-  gap: 16px;
+  gap: 14px;
 }
 
 .field {
@@ -138,20 +150,28 @@ input[type="file"] {
 .label {
   font-size: 14px;
   font-weight: 700;
+  color: #1f2937;
 }
 
 .input,
 .textarea {
-  border-radius: 18px;
+  border-radius: 12px;
   border: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.85);
-  padding: 14px 16px;
+  background: var(--surface-strong);
+  padding: 12px 14px;
   color: var(--text);
   outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.input:focus,
+.textarea:focus {
+  border-color: rgba(10, 102, 255, 0.55);
+  box-shadow: 0 0 0 4px rgba(10, 102, 255, 0.12);
 }
 
 .textarea {
-  min-height: 180px;
+  min-height: 170px;
   resize: vertical;
 }
 
@@ -160,10 +180,10 @@ input[type="file"] {
 }
 
 .panel {
-  border-radius: 20px;
+  border-radius: 14px;
   border: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.7);
-  padding: 18px;
+  background: rgba(255, 255, 255, 0.75);
+  padding: 16px;
 }
 
 .avatar-stage {
@@ -179,7 +199,7 @@ input[type="file"] {
   border-radius: 50%;
   display: grid;
   place-items: center;
-  background: linear-gradient(135deg, #1f1a17, #0b5fff);
+  background: linear-gradient(135deg, #1f2937, #0a66ff);
   color: white;
   font-weight: 800;
   letter-spacing: 0.08em;
@@ -192,10 +212,11 @@ input[type="file"] {
 
 .camera-preview {
   width: 100%;
-  min-height: 300px;
-  border-radius: 18px;
-  background: #111;
+  min-height: 280px;
+  border-radius: 12px;
+  background: #0f172a;
   object-fit: cover;
+  border: 1px solid #1e293b;
 }
 
 .question-list {
@@ -211,11 +232,12 @@ input[type="file"] {
 
 .question-item.active {
   font-weight: 700;
+  color: #0a66ff;
 }
 
 .score-pill {
   width: fit-content;
-  padding: 10px 14px;
+  padding: 8px 12px;
   border-radius: 999px;
   background: linear-gradient(135deg, var(--accent), var(--accent-2));
   color: white;
@@ -228,24 +250,24 @@ input[type="file"] {
 }
 
 .error {
-  color: #9a1f14;
-  background: rgba(154, 31, 20, 0.08);
-  border: 1px solid rgba(154, 31, 20, 0.18);
+  color: #8a1b13;
+  background: rgba(199, 33, 20, 0.08);
+  border: 1px solid rgba(199, 33, 20, 0.22);
   padding: 12px 14px;
-  border-radius: 14px;
+  border-radius: 12px;
 }
 
 .success {
-  color: #165a2f;
-  background: rgba(22, 90, 47, 0.08);
-  border: 1px solid rgba(22, 90, 47, 0.18);
+  color: #0f5132;
+  background: rgba(15, 81, 50, 0.08);
+  border: 1px solid rgba(15, 81, 50, 0.22);
   padding: 12px 14px;
-  border-radius: 14px;
+  border-radius: 12px;
 }
 
 @media (min-width: 860px) {
   .two-column {
-    grid-template-columns: 1.05fr 0.95fr;
+    grid-template-columns: 1fr 1fr;
     align-items: start;
   }
 }

@@ -4,22 +4,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "../lib/api";
 
-function speakText(text) {
-  if (typeof window === "undefined" || !window.speechSynthesis) {
-    return;
-  }
-
-  window.speechSynthesis.cancel();
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.rate = 0.95;
-  utterance.pitch = 1;
-  utterance.volume = 1;
-  window.speechSynthesis.speak(utterance);
-}
+const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL;
 
 export default function InterviewWorkspace({ sessionId }) {
   const router = useRouter();
   const videoRef = useRef(null);
+  const audioRef = useRef(null);
   const streamRef = useRef(null);
   const recorderRef = useRef(null);
   const chunksRef = useRef([]);
@@ -29,8 +19,11 @@ export default function InterviewWorkspace({ sessionId }) {
   const [error, setError] = useState("");
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isRecording, setIsRecording] = useState(false);
+  const [isProcessingAnswer, setIsProcessingAnswer] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(120);
   const [recordedBlobUrl, setRecordedBlobUrl] = useState("");
+  const [transcripts, setTranscripts] = useState({});
 
   const questions = useMemo(() => sessionData?.session?.questions || [], [sessionData]);
   const currentQuestion = questions[currentIndex];
@@ -44,6 +37,7 @@ export default function InterviewWorkspace({ sessionId }) {
         if (active) {
           setSessionData(data);
           setCurrentIndex(0);
+          setTranscripts(data.session?.transcripts || {});
         }
       } catch (loadError) {
         if (active) {
@@ -109,10 +103,46 @@ export default function InterviewWorkspace({ sessionId }) {
   }, []);
 
   useEffect(() => {
-    if (currentQuestion) {
-      speakText(currentQuestion.question);
+    async function playQuestionAudio() {
+      if (!currentQuestion || !apiBaseUrl) {
+        return;
+      }
+
+      try {
+        setIsSpeaking(true);
+        const response = await fetch(`${apiBaseUrl}/sessions/${sessionId}/speak-question`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ questionId: currentQuestion.id }),
+        });
+
+        if (!response.ok) {
+          throw new Error("Question audio generation failed");
+        }
+
+        const arrayBuffer = await response.arrayBuffer();
+        const blob = new Blob([arrayBuffer], { type: "audio/mpeg" });
+        const url = URL.createObjectURL(blob);
+
+        if (audioRef.current) {
+          audioRef.current.src = url;
+          await audioRef.current.play();
+        }
+      } catch {
+        if (typeof window !== "undefined" && window.speechSynthesis && currentQuestion.question) {
+          window.speechSynthesis.cancel();
+          const utterance = new SpeechSynthesisUtterance(currentQuestion.question);
+          window.speechSynthesis.speak(utterance);
+        }
+      } finally {
+        setIsSpeaking(false);
+      }
     }
-  }, [currentQuestion]);
+
+    playQuestionAudio();
+  }, [currentQuestion, sessionId]);
 
   function startRecording() {
     if (!streamRef.current) {
@@ -121,16 +151,25 @@ export default function InterviewWorkspace({ sessionId }) {
     }
 
     chunksRef.current = [];
-    const recorder = new MediaRecorder(streamRef.current, { mimeType: "video/webm" });
+    let recorder;
+    try {
+      recorder = new MediaRecorder(streamRef.current, { mimeType: "video/webm" });
+    } catch {
+      recorder = new MediaRecorder(streamRef.current);
+    }
     recorder.ondataavailable = (event) => {
       if (event.data.size > 0) {
         chunksRef.current.push(event.data);
       }
     };
-    recorder.onstop = () => {
+    recorder.onstop = async () => {
       const blob = new Blob(chunksRef.current, { type: "video/webm" });
       const url = URL.createObjectURL(blob);
       setRecordedBlobUrl(url);
+
+      if (currentQuestion?.id) {
+        await uploadAndTranscribe(blob, currentQuestion.id);
+      }
     };
 
     recorderRef.current = recorder;
@@ -146,7 +185,55 @@ export default function InterviewWorkspace({ sessionId }) {
     setIsRecording(false);
   }
 
+  async function uploadAndTranscribe(blob, questionId) {
+    try {
+      setError("");
+      setIsProcessingAnswer(true);
+
+      const recordingData = await apiFetch(`/sessions/${sessionId}/recording-url`, {
+        method: "POST",
+        body: JSON.stringify({
+          fileName: `question-${questionId}-${Date.now()}.webm`,
+          contentType: "video/webm",
+        }),
+      });
+
+      const uploadResponse = await fetch(recordingData.uploadUrl, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "video/webm",
+        },
+        body: blob,
+      });
+
+      if (!uploadResponse.ok) {
+        throw new Error("Failed to upload interview recording");
+      }
+
+      const transcriptionData = await apiFetch(`/sessions/${sessionId}/transcribe`, {
+        method: "POST",
+        body: JSON.stringify({
+          questionId,
+          mediaFormat: "webm",
+        }),
+      });
+
+      setTranscripts((current) => ({
+        ...current,
+        [questionId]: transcriptionData.transcript,
+      }));
+    } catch (processingError) {
+      setError(processingError.message || "Failed to process your recorded answer");
+    } finally {
+      setIsProcessingAnswer(false);
+    }
+  }
+
   function nextQuestion() {
+    if (isProcessingAnswer) {
+      return;
+    }
+
     if (currentIndex >= questions.length - 1) {
       stopRecording();
       router.push(`/results/${sessionId}`);
@@ -159,6 +246,10 @@ export default function InterviewWorkspace({ sessionId }) {
   }
 
   async function finishInterview() {
+    if (isProcessingAnswer) {
+      return;
+    }
+
     stopRecording();
     router.push(`/results/${sessionId}`);
   }
@@ -179,11 +270,13 @@ export default function InterviewWorkspace({ sessionId }) {
 
         <div className="panel stack">
           <strong>AI interviewer</strong>
+          <audio ref={audioRef} hidden />
           <div className="avatar-stage">
             <div className="avatar-face">AI</div>
             <div className="avatar-copy">
-              <div className="muted">Static avatar for first release</div>
+              <div className="muted">Static avatar + AWS Polly voice</div>
               <div>{currentQuestion?.question || "No questions available yet."}</div>
+              <div className="muted">{isSpeaking ? "Speaking question..." : "Question audio ready"}</div>
             </div>
           </div>
         </div>
@@ -193,11 +286,12 @@ export default function InterviewWorkspace({ sessionId }) {
           <p style={{ margin: 0, lineHeight: 1.6 }}>{currentQuestion?.question || "Generate questions first to begin the interview."}</p>
           <div className="muted">Type: {currentQuestion?.type || "unknown"}</div>
           <div className="muted">Time left: {Math.floor(secondsLeft / 60)}:{String(secondsLeft % 60).padStart(2, "0")}</div>
+          {isProcessingAnswer ? <div className="success">Uploading and transcribing answer...</div> : null}
         </div>
 
         <div className="actions">
           {!isRecording ? (
-            <button className="button primary" type="button" onClick={startRecording}>
+            <button className="button primary" type="button" onClick={startRecording} disabled={!currentQuestion || isProcessingAnswer}>
               Start answer recording
             </button>
           ) : (
@@ -205,10 +299,10 @@ export default function InterviewWorkspace({ sessionId }) {
               Stop recording
             </button>
           )}
-          <button className="button secondary" type="button" onClick={nextQuestion} disabled={!questions.length}>
+          <button className="button secondary" type="button" onClick={nextQuestion} disabled={!questions.length || isRecording || isProcessingAnswer}>
             Next question
           </button>
-          <button className="button secondary" type="button" onClick={finishInterview}>
+          <button className="button secondary" type="button" onClick={finishInterview} disabled={isRecording || isProcessingAnswer}>
             Finish interview
           </button>
         </div>
@@ -225,7 +319,7 @@ export default function InterviewWorkspace({ sessionId }) {
           <strong>Camera preview</strong>
           <video ref={videoRef} autoPlay playsInline muted className="camera-preview" />
           <div className="muted">
-            Your video stays in the browser for now. We can wire upload and transcription right after this UI is stable.
+            Your recording is uploaded per question and transcribed automatically after you stop recording.
           </div>
         </div>
 
@@ -238,11 +332,14 @@ export default function InterviewWorkspace({ sessionId }) {
         </div>
 
         <div className="panel stack">
-          <strong>Question list</strong>
+          <strong>Question progress</strong>
           <ol className="question-list">
             {questions.map((question, index) => (
               <li key={question.id || index} className={index === currentIndex ? "question-item active" : "question-item"}>
-                {question.question}
+                <div>{question.question}</div>
+                <div className="muted">
+                  {transcripts[question.id] ? "Transcript captured" : "Pending transcript"}
+                </div>
               </li>
             ))}
           </ol>
