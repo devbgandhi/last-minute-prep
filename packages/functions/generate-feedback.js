@@ -6,6 +6,39 @@ import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedroc
 const dynamo = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const bedrock = new BedrockRuntimeClient({ region: "us-east-1" });
 
+function extractJson(text) {
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  return fenced ? fenced[1] : text;
+}
+
+function buildFallbackFeedback(qaPairs) {
+  const answered = qaPairs.filter((item) => item.answer && item.answer !== "No answer recorded");
+  const coverageScore = Math.min(10, Math.max(3, Math.round((answered.length / Math.max(qaPairs.length, 1)) * 10)));
+
+  return {
+    overallScore: coverageScore,
+    overallSummary: "This is a fallback report generated without model evaluation. Complete, specific answers with clear examples will improve your score.",
+    strengths: [
+      "You completed the interview flow and recorded responses.",
+      "Your answers are captured for each question.",
+      "You can iterate quickly by re-running the interview.",
+    ],
+    improvements: [
+      "Use structured STAR-style examples in behavioral answers.",
+      "Include measurable outcomes and technical depth in responses.",
+      "Keep answers concise and aligned to the role requirements.",
+    ],
+    questionFeedback: qaPairs.map((item) => ({
+      question: item.question,
+      score: item.answer && item.answer !== "No answer recorded" ? 7 : 4,
+      feedback: item.answer && item.answer !== "No answer recorded"
+        ? "Answer captured. Improve by adding concrete impact, tradeoffs, and implementation details."
+        : "No answer was recorded for this question.",
+      betterAnswer: "Use a concise structure: context, your action, technical decisions, and measurable outcome.",
+    })),
+  };
+}
+
 export const handler = async (event) => {
   try {
     const { sessionId } = event.pathParameters;
@@ -63,24 +96,31 @@ Return ONLY a JSON object in this exact format, no markdown:
   ]
 }`;
 
-    // call Claude Haiku via Bedrock
-    const bedrockResponse = await bedrock.send(new InvokeModelCommand({
-      modelId: "anthropic.claude-haiku-4-5-20251001-v1:0",
-      contentType: "application/json",
-      accept: "application/json",
-      body: JSON.stringify({
-        anthropic_version: "bedrock-2023-05-31",
-        max_tokens: 2048,
-        messages: [
-          { role: "user", content: prompt }
-        ],
-      }),
-    }));
+    let feedback;
 
-    // parse Bedrock response
-    const responseBody = JSON.parse(Buffer.from(bedrockResponse.body).toString());
-    const responseText = responseBody.content[0].text;
-    const feedback = JSON.parse(responseText);
+    try {
+      // call Claude Haiku via Bedrock
+      const bedrockResponse = await bedrock.send(new InvokeModelCommand({
+        modelId: "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+        contentType: "application/json",
+        accept: "application/json",
+        body: JSON.stringify({
+          anthropic_version: "bedrock-2023-05-31",
+          max_tokens: 2048,
+          messages: [
+            { role: "user", content: prompt }
+          ],
+        }),
+      }));
+
+      // parse Bedrock response
+      const responseBody = JSON.parse(Buffer.from(bedrockResponse.body).toString());
+      const responseText = responseBody.content[0].text;
+      feedback = JSON.parse(extractJson(responseText));
+    } catch (bedrockErr) {
+      console.error("Bedrock feedback generation failed, using fallback feedback", bedrockErr);
+      feedback = buildFallbackFeedback(qaPairs);
+    }
 
     // save feedback to DynamoDB
     await dynamo.send(new UpdateCommand({

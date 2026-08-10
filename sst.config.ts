@@ -7,6 +7,12 @@ export default $config({
       removal: input?.stage === "production" ? "retain" : "remove",
       protect: ["production"].includes(input?.stage),
       home: "aws",
+      providers: {
+        aws: {
+          version: "6.83.4",
+          profile: "last-min-prep-dev",
+        },
+      },
     };
   },
   async run() {
@@ -30,7 +36,6 @@ export default $config({
     const sessionsTable = new sst.aws.Dynamo("Sessions", {
       fields: {
         sessionId: "string",
-        createdAt: "string",
       },
       primaryIndex: { hashKey: "sessionId" },
     });
@@ -47,6 +52,16 @@ export default $config({
         allowMethods: ["GET", "HEAD", "POST", "PUT", "DELETE"],
         allowHeaders: ["*"],
       },
+      transform: {
+        stage: (args) => {
+          args.defaultRouteSettings = {
+            // Caps requests per API key/IP so a script or bot can't run up
+            // Bedrock/Transcribe/Polly costs unchecked.
+            throttlingBurstLimit: 10,
+            throttlingRateLimit: 5,
+          };
+        },
+      },
     });
 
     api.route("POST /sessions/start", {
@@ -60,6 +75,12 @@ export default $config({
       environment: {
         ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY!,
       },
+      permissions: [
+        {
+          actions: ["bedrock:InvokeModel"],
+          resources: ["*"],
+        },
+      ],
     });
 
     api.route("POST /sessions/{sessionId}/recording-url", {
@@ -69,7 +90,24 @@ export default $config({
 
     api.route("POST /sessions/{sessionId}/transcribe", {
       handler: "packages/functions/transcribe.handler",
-      link: [recordingsBucket, sessionsTable, responsesTable],
+      link: [recordingsBucket, sessionsTable],
+      permissions: [
+        {
+          actions: ["transcribe:StartTranscriptionJob"],
+          resources: ["*"],
+        },
+      ],
+    });
+
+    api.route("GET /sessions/{sessionId}/transcribe/{jobName}", {
+      handler: "packages/functions/transcription-status.handler",
+      link: [sessionsTable, responsesTable],
+      permissions: [
+        {
+          actions: ["transcribe:GetTranscriptionJob"],
+          resources: ["*"],
+        },
+      ],
     });
 
     api.route("POST /sessions/{sessionId}/feedback", {
@@ -78,11 +116,23 @@ export default $config({
       environment: {
         ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY!,
       },
+      permissions: [
+        {
+          actions: ["bedrock:InvokeModel"],
+          resources: ["*"],
+        },
+      ],
     });
 
     api.route("POST /sessions/{sessionId}/speak-question", {
       handler: "packages/functions/speak-question.handler",
       link: [sessionsTable],
+      permissions: [
+        {
+          actions: ["polly:SynthesizeSpeech"],
+          resources: ["*"],
+        },
+      ],
     });
 
     api.route("GET /sessions/{sessionId}", {
@@ -90,13 +140,9 @@ export default $config({
       link: [sessionsTable, responsesTable],
     });
 
-    api.route("GET /sessions", {
-      handler: "packages/functions/sessions-list.handler",
-      link: [sessionsTable],
-    });
-
     // Frontend
     const web = new sst.aws.Nextjs("Web", {
+      path: "web",
       link: [api, resumesBucket, recordingsBucket],
       environment: {
         NEXT_PUBLIC_API_URL: api.url,

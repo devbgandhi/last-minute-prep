@@ -6,6 +6,21 @@ import { apiFetch } from "../lib/api";
 
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL;
 
+const INTERVIEWER_NAMES = ["Alex", "Jordan", "Morgan", "Taylor", "Sam", "Casey"];
+
+function interviewerNameForSession(sessionId) {
+  if (!sessionId) {
+    return INTERVIEWER_NAMES[0];
+  }
+
+  let hash = 0;
+  for (let i = 0; i < sessionId.length; i += 1) {
+    hash = (hash * 31 + sessionId.charCodeAt(i)) >>> 0;
+  }
+
+  return INTERVIEWER_NAMES[hash % INTERVIEWER_NAMES.length];
+}
+
 export default function InterviewWorkspace({ sessionId }) {
   const router = useRouter();
   const videoRef = useRef(null);
@@ -27,6 +42,7 @@ export default function InterviewWorkspace({ sessionId }) {
 
   const questions = useMemo(() => sessionData?.session?.questions || [], [sessionData]);
   const currentQuestion = questions[currentIndex];
+  const interviewerName = useMemo(() => interviewerNameForSession(sessionId), [sessionId]);
 
   useEffect(() => {
     let active = true;
@@ -210,7 +226,7 @@ export default function InterviewWorkspace({ sessionId }) {
         throw new Error("Failed to upload interview recording");
       }
 
-      const transcriptionData = await apiFetch(`/sessions/${sessionId}/transcribe`, {
+      const startData = await apiFetch(`/sessions/${sessionId}/transcribe`, {
         method: "POST",
         body: JSON.stringify({
           questionId,
@@ -218,10 +234,14 @@ export default function InterviewWorkspace({ sessionId }) {
         }),
       });
 
+      const transcript = await pollTranscriptionStatus(startData.jobName, questionId);
+
       setTranscripts((current) => ({
         ...current,
-        [questionId]: transcriptionData.transcript,
+        [questionId]: transcript,
       }));
+
+      advanceQuestion();
     } catch (processingError) {
       setError(processingError.message || "Failed to process your recorded answer");
     } finally {
@@ -229,11 +249,30 @@ export default function InterviewWorkspace({ sessionId }) {
     }
   }
 
-  function nextQuestion() {
-    if (isProcessingAnswer) {
-      return;
+  async function pollTranscriptionStatus(jobName, questionId) {
+    const maxAttempts = 40;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      const statusData = await apiFetch(
+        `/sessions/${sessionId}/transcribe/${jobName}?questionId=${encodeURIComponent(questionId)}`,
+        { method: "GET" }
+      );
+
+      if (statusData.status === "COMPLETED") {
+        return statusData.transcript;
+      }
+
+      if (statusData.status === "FAILED") {
+        throw new Error(statusData.error || "Transcription failed");
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 3000));
     }
 
+    throw new Error("Transcription timed out");
+  }
+
+  function advanceQuestion() {
     if (currentIndex >= questions.length - 1) {
       stopRecording();
       router.push(`/results/${sessionId}`);
@@ -243,6 +282,14 @@ export default function InterviewWorkspace({ sessionId }) {
     setCurrentIndex((value) => value + 1);
     stopRecording();
     setRecordedBlobUrl("");
+  }
+
+  function nextQuestion() {
+    if (isProcessingAnswer) {
+      return;
+    }
+
+    advanceQuestion();
   }
 
   async function finishInterview() {
@@ -261,7 +308,7 @@ export default function InterviewWorkspace({ sessionId }) {
   return (
     <section className="card grid two-column">
       <div className="stack">
-        <div className="eyebrow">Live interview</div>
+        <div className="eyebrow">Interview workspace</div>
         <h1 className="title" style={{ fontSize: "clamp(2rem, 4vw, 3.5rem)" }}>
           Question {currentIndex + 1} of {questions.length || 0}
         </h1>
@@ -272,11 +319,20 @@ export default function InterviewWorkspace({ sessionId }) {
           <strong>AI interviewer</strong>
           <audio ref={audioRef} hidden />
           <div className="avatar-stage">
-            <div className="avatar-face">AI</div>
+            <div className={`avatar-face${isSpeaking ? " speaking" : ""}`}>
+              <svg viewBox="0 0 100 100" aria-hidden="true">
+                <ellipse className="avatar-eye left" cx="35" cy="40" rx="6" ry="7" fill="white" />
+                <ellipse className="avatar-eye right" cx="65" cy="40" rx="6" ry="7" fill="white" />
+                <rect className="avatar-mouth" x="37" y="60" width="26" height="7" rx="3.5" fill="white" />
+              </svg>
+            </div>
             <div className="avatar-copy">
-              <div className="muted">Static avatar + AWS Polly voice</div>
+              <strong>{interviewerName}</strong>
+              <div className="muted">
+                <span className={`avatar-status-dot${isSpeaking || isRecording ? " live" : ""}`} />
+                {isSpeaking ? "Speaking..." : isRecording ? "Listening to your answer..." : "Ready for your answer"}
+              </div>
               <div>{currentQuestion?.question || "No questions available yet."}</div>
-              <div className="muted">{isSpeaking ? "Speaking question..." : "Question audio ready"}</div>
             </div>
           </div>
         </div>
@@ -319,13 +375,13 @@ export default function InterviewWorkspace({ sessionId }) {
           <strong>Camera preview</strong>
           <video ref={videoRef} autoPlay playsInline muted className="camera-preview" />
           <div className="muted">
-            Your recording is uploaded per question and transcribed automatically after you stop recording.
+            Your camera and microphone are recorded locally, then uploaded and transcribed per question.
           </div>
         </div>
 
         <div className="panel stack">
           <strong>Session</strong>
-          <div className="muted">{sessionData?.session?.name || "Guest interview"}</div>
+          <div className="muted">{sessionData?.session?.name || "Interview session"}</div>
           <div className="muted">{sessionData?.session?.jobTitle || "Job title unknown"}</div>
           <div className="muted">Status: {sessionData?.session?.status || "Unknown"}</div>
           <div className="muted">Session id: {sessionId}</div>

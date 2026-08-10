@@ -75,6 +75,9 @@ export default function ResultsPage({ params }) {
           <Link className="button secondary" href={`/interview/${sessionId}`}>
             Back to interview
           </Link>
+          <Link className="button secondary" href="/">
+            Back to home
+          </Link>
         </div>
 
         {feedback ? (

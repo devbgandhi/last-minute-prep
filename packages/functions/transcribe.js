@@ -1,16 +1,17 @@
 import { randomUUID } from "node:crypto";
 import { Resource } from "sst";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient, GetCommand, PutCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
-import { TranscribeClient, StartTranscriptionJobCommand, GetTranscriptionJobCommand } from "@aws-sdk/client-transcribe";
+import { DynamoDBDocumentClient, GetCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
+import { TranscribeClient, StartTranscriptionJobCommand } from "@aws-sdk/client-transcribe";
 
 const dynamo = DynamoDBDocumentClient.from(new DynamoDBClient({}));
-const transcribe = new TranscribeClient({ region: "us-east-1" });
-
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const transcribe = new TranscribeClient({});
 
 const encodeS3Key = (key) => key.split("/").map(encodeURIComponent).join("/");
 
+// Starts the Transcribe job and returns immediately. AWS Transcribe jobs commonly
+// take longer than API Gateway's 30s hard integration timeout, so status is polled
+// separately via GET /sessions/{sessionId}/transcribe/{jobName}.
 export const handler = async (event) => {
   try {
     const { sessionId } = event.pathParameters;
@@ -42,7 +43,7 @@ export const handler = async (event) => {
 
     const jobName = `session-${sessionId}-${randomUUID()}`;
     const bucketName = Resource.Recordings.name;
-    const region = process.env.AWS_REGION || "us-east-1";
+    const region = process.env.AWS_REGION;
     const mediaFileUri = `https://${bucketName}.s3.${region}.amazonaws.com/${encodeS3Key(recordingKey)}`;
 
     await transcribe.send(new StartTranscriptionJobCommand({
@@ -54,82 +55,21 @@ export const handler = async (event) => {
       },
     }));
 
-    let transcriptionJob;
-    for (let attempt = 0; attempt < 24; attempt += 1) {
-      const jobResult = await transcribe.send(new GetTranscriptionJobCommand({
-        TranscriptionJobName: jobName,
-      }));
-
-      transcriptionJob = jobResult.TranscriptionJob;
-
-      if (transcriptionJob.TranscriptionJobStatus === "COMPLETED") {
-        break;
-      }
-
-      if (transcriptionJob.TranscriptionJobStatus === "FAILED") {
-        throw new Error(transcriptionJob.FailureReason || "Transcription job failed");
-      }
-
-      await sleep(5000);
-    }
-
-    if (!transcriptionJob || transcriptionJob.TranscriptionJobStatus !== "COMPLETED") {
-      return {
-        statusCode: 504,
-        headers: { "Access-Control-Allow-Origin": "*" },
-        body: JSON.stringify({ error: "Transcription timed out" }),
-      };
-    }
-
-    const transcriptUri = transcriptionJob.Transcript.TranscriptFileUri;
-    const transcriptResponse = await fetch(transcriptUri);
-    if (!transcriptResponse.ok) {
-      throw new Error(`Failed to fetch transcript file: ${transcriptResponse.status}`);
-    }
-
-    const transcriptData = await transcriptResponse.json();
-    const transcriptText = transcriptData.results?.transcripts?.[0]?.transcript || "";
-
-    const responseId = randomUUID();
-
-    await dynamo.send(new PutCommand({
-      TableName: Resource.Responses.name,
-      Item: {
-        responseId,
-        sessionId,
-        questionId: questionId || null,
-        recordingKey,
-        transcriptionJobName: jobName,
-        transcript: transcriptText,
-        createdAt: new Date().toISOString(),
-      },
-    }));
-
-    const expressionAttributeNames = questionId
-      ? { "#questionId": questionId, "#s": "status" }
-      : { "#s": "status" };
-
     await dynamo.send(new UpdateCommand({
       TableName: Resource.Sessions.name,
       Key: { sessionId },
-      UpdateExpression: questionId
-        ? "SET transcript = :transcript, transcripts.#questionId = :transcript, #s = :s, latestTranscript = :transcript"
-        : "SET transcript = :transcript, #s = :s",
-      ExpressionAttributeNames: expressionAttributeNames,
-      ExpressionAttributeValues: {
-        ":transcript": transcriptText,
-        ":s": "TRANSCRIBED",
-      },
+      UpdateExpression: "SET #s = :s",
+      ExpressionAttributeNames: { "#s": "status" },
+      ExpressionAttributeValues: { ":s": "TRANSCRIBING" },
     }));
 
     return {
-      statusCode: 200,
+      statusCode: 202,
       headers: { "Access-Control-Allow-Origin": "*" },
       body: JSON.stringify({
-        responseId,
-        transcript: transcriptText,
+        jobName,
         questionId: questionId || null,
-        transcriptionJobName: jobName,
+        status: "IN_PROGRESS",
       }),
     };
   } catch (err) {
@@ -137,7 +77,7 @@ export const handler = async (event) => {
     return {
       statusCode: 500,
       headers: { "Access-Control-Allow-Origin": "*" },
-      body: JSON.stringify({ error: "Failed to transcribe recording" }),
+      body: JSON.stringify({ error: "Failed to start transcription" }),
     };
   }
 };

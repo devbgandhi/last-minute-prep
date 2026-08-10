@@ -8,6 +8,7 @@ export default function InterviewStartForm({ compact = false }) {
   const router = useRouter();
   const [name, setName] = useState("");
   const [jobTitle, setJobTitle] = useState("");
+  const [company, setCompany] = useState("");
   const [file, setFile] = useState(null);
   const [jobDescription, setJobDescription] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -27,11 +28,6 @@ export default function InterviewStartForm({ compact = false }) {
       return;
     }
 
-    if (!jobDescription.trim()) {
-      setError("Add a job description.");
-      return;
-    }
-
     setIsSubmitting(true);
 
     try {
@@ -44,6 +40,7 @@ export default function InterviewStartForm({ compact = false }) {
           name,
           jobTitle,
           jobDescription,
+          company,
           fileName: file.name,
           fileType: file.type || "application/pdf",
         }),
@@ -63,7 +60,7 @@ export default function InterviewStartForm({ compact = false }) {
 
       await apiFetch(`/sessions/${uploadData.sessionId}/questions`, {
         method: "POST",
-        body: JSON.stringify({ jobDescription }),
+        body: JSON.stringify({ jobDescription, company }),
       });
 
       router.push(`/interview/${uploadData.sessionId}`);
@@ -79,10 +76,10 @@ export default function InterviewStartForm({ compact = false }) {
       <form className="form" onSubmit={handleSubmit}>
         <div className="eyebrow">Guest interview</div>
         <h1 className="title" style={{ fontSize: "clamp(2rem, 4vw, 3.5rem)" }}>
-          Start your interview without signing in.
+          Resume-based interview practice for real roles.
         </h1>
         <p className="lede">
-          Share your name, role, job description, and resume. We’ll create a guest session and send you into the interview flow.
+          Upload your resume, add the role title, and start a structured interview. The job description is optional.
         </p>
 
         {error ? <div className="error">{error}</div> : null}
@@ -116,6 +113,20 @@ export default function InterviewStartForm({ compact = false }) {
         </div>
 
         <div className="field">
+          <label className="label" htmlFor="company">
+            Company <span className="muted">(optional)</span>
+          </label>
+          <input
+            id="company"
+            className="input"
+            type="text"
+            value={company}
+            onChange={(event) => setCompany(event.target.value)}
+            placeholder="Company Name"
+          />
+        </div>
+
+        <div className="field">
           <label className="label" htmlFor="resume">
             Resume PDF
           </label>
@@ -130,34 +141,34 @@ export default function InterviewStartForm({ compact = false }) {
 
         <div className="field">
           <label className="label" htmlFor="jobDescription">
-            Job description
+            Job description <span className="muted">(optional)</span>
           </label>
           <textarea
             id="jobDescription"
             className="textarea"
             value={jobDescription}
             onChange={(event) => setJobDescription(event.target.value)}
-            placeholder="Paste the role description here"
+            placeholder="Paste the role description here, or leave it blank"
           />
         </div>
 
         <button className="button primary" type="submit" disabled={isSubmitting}>
-          {isSubmitting ? "Starting interview..." : "Create interview"}
+          {isSubmitting ? "Starting interview..." : "Start interview"}
         </button>
       </form>
 
       {!compact ? (
         <aside className="panel stack">
-          <div className="eyebrow">Guest mode</div>
+          <div className="eyebrow">How it works</div>
           <div className="muted">
-            No account is needed right now. You can start directly and share your results with the session URL.
+            A session is created instantly, your resume is uploaded to AWS, and interview questions are generated from the role context.
           </div>
           <div className="panel stack">
-            <strong>Flow</strong>
-            <span className="muted">1. Create guest session + signed upload URL</span>
+            <strong>Interview flow</strong>
+            <span className="muted">1. Create session and signed upload URL</span>
             <span className="muted">2. Upload PDF to S3</span>
-            <span className="muted">3. Generate questions</span>
-            <span className="muted">4. Open interview page</span>
+            <span className="muted">3. Generate AI interview questions</span>
+            <span className="muted">4. Practice with the interviewer workspace</span>
           </div>
         </aside>
       ) : null}

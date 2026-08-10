@@ -194,8 +194,10 @@ input[type="file"] {
 }
 
 .avatar-face {
+  position: relative;
   width: 72px;
   height: 72px;
+  flex-shrink: 0;
   border-radius: 50%;
   display: grid;
   place-items: center;
@@ -203,6 +205,85 @@ input[type="file"] {
   color: white;
   font-weight: 800;
   letter-spacing: 0.08em;
+}
+
+.avatar-face svg {
+  width: 60%;
+  height: 60%;
+}
+
+.avatar-face::after {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  border: 2px solid rgba(10, 102, 255, 0.4);
+  opacity: 0;
+}
+
+.avatar-face.speaking::after {
+  opacity: 1;
+  animation: avatar-pulse 1.4s ease-out infinite;
+}
+
+.avatar-eye {
+  animation: avatar-blink 4.5s ease-in-out infinite;
+  transform-origin: center;
+}
+
+.avatar-eye.right {
+  animation-delay: 0.08s;
+}
+
+.avatar-mouth {
+  transform-origin: center;
+}
+
+.avatar-face.speaking .avatar-mouth {
+  animation: avatar-talk 0.42s ease-in-out infinite;
+}
+
+@keyframes avatar-pulse {
+  0% {
+    transform: scale(0.9);
+    opacity: 0.6;
+  }
+  100% {
+    transform: scale(1.35);
+    opacity: 0;
+  }
+}
+
+@keyframes avatar-blink {
+  0%, 92%, 100% {
+    transform: scaleY(1);
+  }
+  96% {
+    transform: scaleY(0.08);
+  }
+}
+
+@keyframes avatar-talk {
+  0%, 100% {
+    transform: scaleY(0.4);
+  }
+  50% {
+    transform: scaleY(1.15);
+  }
+}
+
+.avatar-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 6px;
+  background: #9ca3af;
+}
+
+.avatar-status-dot.live {
+  background: #16a34a;
+  box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.18);
 }
 
 .avatar-copy {

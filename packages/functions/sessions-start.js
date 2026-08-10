@@ -3,24 +3,24 @@ import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, PutCommand } from "@aws-sdk/lib-dynamodb";
-import { v4 as uuidv4 } from "uuid";
+import { randomUUID } from "node:crypto";
 
 const s3 = new S3Client({});
 const dynamo = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
 export const handler = async (event) => {
   try {
-    const { sessionId: requestedSessionId, name, jobTitle, jobDescription, fileName, fileType } = JSON.parse(event.body || "{}");
+    const { sessionId: requestedSessionId, name, jobTitle, jobDescription, company, fileName, fileType } = JSON.parse(event.body || "{}");
 
-    if (!name || !jobTitle || !jobDescription || !fileName) {
+    if (!name || !jobTitle || !fileName) {
       return {
         statusCode: 400,
         headers: { "Access-Control-Allow-Origin": "*" },
-        body: JSON.stringify({ error: "name, jobTitle, jobDescription and fileName are required" }),
+        body: JSON.stringify({ error: "name, jobTitle and fileName are required" }),
       };
     }
 
-    const sessionId = requestedSessionId || uuidv4();
+    const sessionId = requestedSessionId || randomUUID();
     const resumeKey = `resumes/${sessionId}/${fileName}`;
 
     const uploadUrl = await getSignedUrl(
@@ -39,9 +39,11 @@ export const handler = async (event) => {
         sessionId,
         name,
         jobTitle,
-        jobDescription,
+        jobDescription: jobDescription || "",
+        company: company || "",
         resumeKey,
         status: "STARTED",
+        transcripts: {},
         createdAt: new Date().toISOString(),
       },
     }));
@@ -56,7 +58,10 @@ export const handler = async (event) => {
     return {
       statusCode: 500,
       headers: { "Access-Control-Allow-Origin": "*" },
-      body: JSON.stringify({ error: "Failed to start session" }),
+      body: JSON.stringify({
+        error: "Failed to start session",
+        detail: err?.message || String(err),
+      }),
     };
   }
 };

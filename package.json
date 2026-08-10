@@ -8,6 +8,7 @@
     "@aws-sdk/lib-dynamodb": "^3.1095.0",
     "@aws-sdk/s3-request-presigner": "^3.1079.0",
     "pdf-parse": "^1.1.1",
+    "sst": "^3.0.0",
     "uuid": "^11.1.0"
   }
 }

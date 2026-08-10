@@ -3,7 +3,7 @@ import { Resource } from "sst";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, GetCommand } from "@aws-sdk/lib-dynamodb";
 
-const polly = new PollyClient({ region: "us-east-1" });
+const polly = new PollyClient({});
 const dynamo = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
 export const handler = async (event) => {
