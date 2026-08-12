@@ -10,7 +10,7 @@ const dynamo = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
 export const handler = async (event) => {
   try {
-    const { sessionId: requestedSessionId, name, jobTitle, jobDescription, company, fileName, fileType } = JSON.parse(event.body || "{}");
+    const { sessionId: requestedSessionId, name, jobTitle, jobDescription, company, numQuestions, additionalNotes, fileName, fileType } = JSON.parse(event.body || "{}");
 
     if (!name || !jobTitle || !fileName) {
       return {
@@ -22,6 +22,10 @@ export const handler = async (event) => {
 
     const sessionId = requestedSessionId || randomUUID();
     const resumeKey = `resumes/${sessionId}/${fileName}`;
+    const parsedNumQuestions = Number.parseInt(numQuestions, 10);
+    const clampedNumQuestions = Number.isFinite(parsedNumQuestions)
+      ? Math.min(15, Math.max(3, parsedNumQuestions))
+      : 8;
 
     const uploadUrl = await getSignedUrl(
       s3,
@@ -41,6 +45,8 @@ export const handler = async (event) => {
         jobTitle,
         jobDescription: jobDescription || "",
         company: company || "",
+        numQuestions: clampedNumQuestions,
+        additionalNotes: additionalNotes || "",
         resumeKey,
         status: "STARTED",
         transcripts: {},

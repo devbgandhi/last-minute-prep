@@ -55,10 +55,14 @@ export default $config({
       transform: {
         stage: (args) => {
           args.defaultRouteSettings = {
-            // Caps requests per API key/IP so a script or bot can't run up
-            // Bedrock/Transcribe/Polly costs unchecked.
-            throttlingBurstLimit: 10,
-            throttlingRateLimit: 5,
+            // Shared across the whole API and all users (no per-user
+            // isolation without auth/API keys). Sized to comfortably cover
+            // several concurrent interviews — each browser polls transcript
+            // status every 3s per in-flight answer and calls a handful of
+            // other routes per question — while still blocking a scripted
+            // loop from running up Bedrock/Transcribe/Polly costs.
+            throttlingBurstLimit: 40,
+            throttlingRateLimit: 20,
           };
         },
       },
@@ -72,9 +76,6 @@ export default $config({
     api.route("POST /sessions/{sessionId}/questions", {
       handler: "packages/functions/generate-questions.handler",
       link: [sessionsTable, resumesBucket],
-      environment: {
-        ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY!,
-      },
       permissions: [
         {
           actions: ["bedrock:InvokeModel"],
@@ -113,9 +114,6 @@ export default $config({
     api.route("POST /sessions/{sessionId}/feedback", {
       handler: "packages/functions/generate-feedback.handler",
       link: [sessionsTable, responsesTable],
-      environment: {
-        ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY!,
-      },
       permissions: [
         {
           actions: ["bedrock:InvokeModel"],
@@ -147,6 +145,13 @@ export default $config({
       environment: {
         NEXT_PUBLIC_API_URL: api.url,
       },
+      domain:
+        $app.stage === "production"
+          ? {
+              name: "lastminprep.dev",
+              redirects: ["www.lastminprep.dev"],
+            }
+          : undefined,
     });
 
     return {

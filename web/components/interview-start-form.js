@@ -11,6 +11,8 @@ export default function InterviewStartForm({ compact = false }) {
   const [company, setCompany] = useState("");
   const [file, setFile] = useState(null);
   const [jobDescription, setJobDescription] = useState("");
+  const [numQuestions, setNumQuestions] = useState(8);
+  const [additionalNotes, setAdditionalNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -41,6 +43,8 @@ export default function InterviewStartForm({ compact = false }) {
           jobTitle,
           jobDescription,
           company,
+          numQuestions,
+          additionalNotes,
           fileName: file.name,
           fileType: file.type || "application/pdf",
         }),
@@ -60,7 +64,7 @@ export default function InterviewStartForm({ compact = false }) {
 
       await apiFetch(`/sessions/${uploadData.sessionId}/questions`, {
         method: "POST",
-        body: JSON.stringify({ jobDescription, company }),
+        body: JSON.stringify({ jobDescription, company, numQuestions, additionalNotes }),
       });
 
       router.push(`/interview/${uploadData.sessionId}`);
@@ -152,6 +156,35 @@ export default function InterviewStartForm({ compact = false }) {
           />
         </div>
 
+        <div className="field">
+          <label className="label" htmlFor="numQuestions">
+            Number of questions: {numQuestions}
+          </label>
+          <input
+            id="numQuestions"
+            type="range"
+            min="3"
+            max="15"
+            step="1"
+            value={numQuestions}
+            onChange={(event) => setNumQuestions(Number(event.target.value))}
+            style={{ "--fill": `${((numQuestions - 3) / (15 - 3)) * 100}%` }}
+          />
+        </div>
+
+        <div className="field">
+          <label className="label" htmlFor="additionalNotes">
+            Anything else the interviewer should know? <span className="muted">(optional)</span>
+          </label>
+          <textarea
+            id="additionalNotes"
+            className="textarea"
+            value={additionalNotes}
+            onChange={(event) => setAdditionalNotes(event.target.value)}
+            placeholder="e.g. focus more on leadership questions, go easy on system design, this is a career switch, etc."
+          />
+        </div>
+
         <button className="button primary" type="submit" disabled={isSubmitting}>
           {isSubmitting ? "Starting interview..." : "Start interview"}
         </button>
@@ -161,14 +194,14 @@ export default function InterviewStartForm({ compact = false }) {
         <aside className="panel stack">
           <div className="eyebrow">How it works</div>
           <div className="muted">
-            A session is created instantly, your resume is uploaded to AWS, and interview questions are generated from the role context.
+            Upload your resume and tell us about the role — we'll get your practice interview ready in seconds.
           </div>
           <div className="panel stack">
-            <strong>Interview flow</strong>
-            <span className="muted">1. Create session and signed upload URL</span>
-            <span className="muted">2. Upload PDF to S3</span>
-            <span className="muted">3. Generate AI interview questions</span>
-            <span className="muted">4. Practice with the interviewer workspace</span>
+            <strong>What happens next</strong>
+            <span className="muted">1. Upload your resume</span>
+            <span className="muted">2. We prepare questions based on your background and the role</span>
+            <span className="muted">3. Answer out loud, just like a real interview</span>
+            <span className="muted">4. Get instant feedback on how you did</span>
           </div>
         </aside>
       ) : null}

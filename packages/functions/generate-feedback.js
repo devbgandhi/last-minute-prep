@@ -11,29 +11,40 @@ function extractJson(text) {
   return fenced ? fenced[1] : text;
 }
 
+function assessAnswer(answer) {
+  if (!answer || answer === "No answer recorded") {
+    return { hasAnswer: false, isWeak: true };
+  }
+  const words = answer.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const distinctWords = new Set(words.map((word) => word.replace(/[^a-z0-9]/g, "")));
+  const isWeak = words.length < 12 || distinctWords.size <= 3;
+  return { hasAnswer: true, isWeak };
+}
+
 function buildFallbackFeedback(qaPairs) {
-  const answered = qaPairs.filter((item) => item.answer && item.answer !== "No answer recorded");
-  const coverageScore = Math.min(10, Math.max(3, Math.round((answered.length / Math.max(qaPairs.length, 1)) * 10)));
+  const assessed = qaPairs.map((item) => ({ ...item, quality: assessAnswer(item.answer) }));
+  const solidAnswers = assessed.filter((item) => item.quality.hasAnswer && !item.quality.isWeak);
+  const overallScore = Math.min(10, Math.max(1, Math.round((solidAnswers.length / Math.max(qaPairs.length, 1)) * 10)));
 
   return {
-    overallScore: coverageScore,
-    overallSummary: "This is a fallback report generated without model evaluation. Complete, specific answers with clear examples will improve your score.",
-    strengths: [
-      "You completed the interview flow and recorded responses.",
-      "Your answers are captured for each question.",
-      "You can iterate quickly by re-running the interview.",
-    ],
+    overallScore,
+    overallSummary: "This is a fallback report generated without model evaluation, based only on whether each answer had substantive content. Complete, specific answers with clear examples will improve your score.",
+    strengths: solidAnswers.length > 0
+      ? ["You provided substantive answers to at least some questions."]
+      : [],
     improvements: [
       "Use structured STAR-style examples in behavioral answers.",
       "Include measurable outcomes and technical depth in responses.",
       "Keep answers concise and aligned to the role requirements.",
     ],
-    questionFeedback: qaPairs.map((item) => ({
+    questionFeedback: assessed.map((item) => ({
       question: item.question,
-      score: item.answer && item.answer !== "No answer recorded" ? 7 : 4,
-      feedback: item.answer && item.answer !== "No answer recorded"
-        ? "Answer captured. Improve by adding concrete impact, tradeoffs, and implementation details."
-        : "No answer was recorded for this question.",
+      score: !item.quality.hasAnswer ? 1 : item.quality.isWeak ? 2 : 7,
+      feedback: !item.quality.hasAnswer
+        ? "No answer was recorded for this question."
+        : item.quality.isWeak
+          ? "This response is too short or repetitive to substantively address the question."
+          : "Answer captured. Improve by adding concrete impact, tradeoffs, and implementation details.",
       betterAnswer: "Use a concise structure: context, your action, technical decisions, and measurable outcome.",
     })),
   };
@@ -106,7 +117,7 @@ Return ONLY a JSON object in this exact format, no markdown:
         accept: "application/json",
         body: JSON.stringify({
           anthropic_version: "bedrock-2023-05-31",
-          max_tokens: 2048,
+          max_tokens: Math.min(4096, 400 + qaPairs.length * 220),
           messages: [
             { role: "user", content: prompt }
           ],

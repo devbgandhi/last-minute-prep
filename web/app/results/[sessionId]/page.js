@@ -3,12 +3,35 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { apiFetch } from "../../../lib/api";
+import { getFullRecording } from "../../../lib/recording-store";
 
 export default function ResultsPage({ params }) {
   const { sessionId } = params;
   const [sessionData, setSessionData] = useState(null);
   const [error, setError] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
+  const [recordingUrl, setRecordingUrl] = useState("");
+
+  // Create and revoke the object URL within the same effect run. Next.js
+  // dev mode double-invokes effects (React Strict Mode: mount, cleanup,
+  // mount again) — splitting creation (e.g. via useMemo, computed once)
+  // from revocation (a separate cleanup effect) revokes the URL on the
+  // phantom cleanup pass without ever recreating it, leaving the download
+  // link pointing at a dead blob URL.
+  useEffect(() => {
+    const blob = getFullRecording(sessionId);
+    if (!blob) {
+      setRecordingUrl("");
+      return undefined;
+    }
+
+    const url = URL.createObjectURL(blob);
+    setRecordingUrl(url);
+
+    return () => {
+      URL.revokeObjectURL(url);
+    };
+  }, [sessionId]);
 
   useEffect(() => {
     let active = true;
@@ -56,7 +79,10 @@ export default function ResultsPage({ params }) {
     }
   }
 
-  const feedback = sessionData?.session?.feedback;
+  const session = sessionData?.session;
+  const feedback = session?.feedback;
+  const questions = session?.questions || [];
+  const transcripts = session?.transcripts || {};
 
   return (
     <main className="shell">
@@ -78,7 +104,17 @@ export default function ResultsPage({ params }) {
           <Link className="button secondary" href="/">
             Back to home
           </Link>
+          {recordingUrl ? (
+            <a className="button secondary" href={recordingUrl} download={`interview-${sessionId}.webm`}>
+              Download full interview recording
+            </a>
+          ) : null}
         </div>
+        {recordingUrl ? (
+          <div className="muted">
+            The recording is only available in this browser tab right after finishing — it isn't saved anywhere, so refreshing this page will lose it.
+          </div>
+        ) : null}
 
         {feedback ? (
           <div className="grid two-column">
@@ -115,7 +151,32 @@ export default function ResultsPage({ params }) {
 
         <div className="panel stack">
           <strong>Question feedback</strong>
-          <pre style={{ whiteSpace: "pre-wrap", margin: 0 }}>{JSON.stringify(feedback?.questionFeedback || [], null, 2)}</pre>
+          {(feedback?.questionFeedback || []).length === 0 ? (
+            <div className="muted">No question feedback yet.</div>
+          ) : (
+            (feedback?.questionFeedback || []).map((item, index) => {
+              const questionId = questions[index]?.id;
+              const answer = questionId ? transcripts[questionId] : undefined;
+
+              return (
+                <div key={`${item.question}-${index}`} className="panel stack">
+                  <strong>
+                    Q{index + 1}: {item.question}
+                  </strong>
+                  <div>Score: {item.score ?? "N/A"} / 10</div>
+                  <p style={{ margin: 0, lineHeight: 1.6 }}>
+                    <em>You said:</em> {answer || "No answer recorded."}
+                  </p>
+                  <p style={{ margin: 0, lineHeight: 1.6 }}>{item.feedback}</p>
+                  {item.betterAnswer ? (
+                    <p style={{ margin: 0, lineHeight: 1.6 }}>
+                      <em>Stronger answer:</em> {item.betterAnswer}
+                    </p>
+                  ) : null}
+                </div>
+              );
+            })
+          )}
         </div>
       </section>
     </main>
